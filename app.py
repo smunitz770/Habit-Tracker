@@ -1,57 +1,51 @@
-import json
-import os
 from calendar import monthrange
 from datetime import date, timedelta
 
 import streamlit as st
+from supabase import create_client
 
+
+# -----------------------------
+# Auth (simple password)
+# -----------------------------
 password = st.text_input("Enter password", type="password")
 
 if password != "#Mhabittracker770":
     st.stop()
 
 
-DATA_FILE = "data.json"
+# -----------------------------
+# Supabase setup
+# -----------------------------
+SUPABASE_URL = "https://ftexhuhrywsmtwjquqqx.supabase.co"
+SUPABASE_KEY = "sb_publishable_EdrvbNWZNO3lOZuQeFPCxg_Vc6Ieo-X"
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
 # -----------------------------
 # Data
 # -----------------------------
 def load_data() -> dict[str, str]:
-    if not os.path.exists(DATA_FILE):
-        return {}
+    response = supabase.table("habit_days").select("*").execute()
 
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            raw = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {}
+    data = {}
+    for row in response.data:
+        data[row["day"]] = row["status"]
 
-    cleaned: dict[str, str] = {}
-    for k, v in raw.items():
-        try:
-            date.fromisoformat(k)
-        except ValueError:
-            continue
-
-        if v in {"win", "fail"}:
-            cleaned[k] = v
-
-    return cleaned
-
-
-def save_data(data: dict[str, str]) -> None:
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(dict(sorted(data.items())), f, indent=2)
+    return data
 
 
 def set_day_status(data: dict[str, str], day: date, status: str) -> None:
-    key = day.isoformat()
+    day_str = day.isoformat()
+
     if status == "none":
-        data.pop(key, None)
+        supabase.table("habit_days").delete().eq("day", day_str).execute()
     else:
-        data[key] = status
-    save_data(data)
+        supabase.table("habit_days").upsert({
+            "day": day_str,
+            "status": status
+        }).execute()
 
 
 # -----------------------------
